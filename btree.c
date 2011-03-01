@@ -731,14 +731,34 @@ int btree_add_nonfull(struct btree *bt, uint64_t nodeptr, uint64_t pointedby, un
 
         if (i < 0) break;
         cmp = memcmp(key,n->keys+i*BTREE_HASHED_KEY_LEN,BTREE_HASHED_KEY_LEN);
-        if (cmp == 0) found = 1; /* the key is already present in the btree */
+        if (cmp == 0) {
+            found = 1; /* the key is already present in the btree */
+            break;
+        }
         if (cmp >= 0) break;
         i--;
     }
 
-    if (!replace && found) {
-        errno = EBUSY;
-        return -1;
+    /* Key already present? Replace it with the new value if replace is true
+     * otherwise return an error. */
+    if (found) {
+        if (!replace) {
+            errno = EBUSY;
+            return -1;
+        } else {
+            uint64_t oldvaloff = n->values[i];
+            uint64_t newvaloff;
+
+            if ((newvaloff = btree_alloc(bt,vlen)) == 0) goto err;
+            if (btree_pwrite(bt,val,vlen,newvaloff) == -1) goto err;
+            btree_sync(bt);
+            /* Overwrite the pointer to the old value off with the new one. */
+            if (btree_pwrite_u64(bt,newvaloff,nodeptr+16+(BTREE_HASHED_KEY_LEN*BTREE_MAX_KEYS)+(8*i)) == -1) goto err;
+            /* Finally we can free the old value, and the in memory node. */
+            btree_free(bt,oldvaloff);
+            btree_free_node(n);
+            return 0;
+        }
     }
 
     if (n->isleaf) {

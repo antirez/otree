@@ -63,7 +63,7 @@ int main(int argc, char **argv) {
         strcpy(key,argv[2]);
 
         retval = btree_add(bt,(unsigned char*)key,
-            (unsigned char*)argv[3],strlen(argv[3]),0);
+            (unsigned char*)argv[3],strlen(argv[3]),1);
         printf("retval %d\n", retval);
         if (retval == -1) {
             printf("Error: %s\n", strerror(errno));
