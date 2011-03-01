@@ -718,15 +718,28 @@ void btree_node_insert_key_at(struct btree_node *n, int i, unsigned char *key, u
  * EFAULT if the btree seems corrupted.
  * EEXIST if the key already exists.
  */
-int btree_add_nonfull(struct btree *bt, uint64_t nodeptr, uint64_t pointedby, unsigned char *key, unsigned char *val, size_t vlen) {
+int btree_add_nonfull(struct btree *bt, uint64_t nodeptr, uint64_t pointedby, unsigned char *key, unsigned char *val, size_t vlen, int replace) {
     struct btree_node *n = NULL;
-    int i;
+    int i, found = 0;
 
     if ((n = btree_read_node(bt,nodeptr)) == NULL) return -1;
     i = n->numkeys-1;
 
     /* Seek to the right position in the current node */
-    while(i >= 0 && memcmp(key,n->keys+i*BTREE_HASHED_KEY_LEN,BTREE_HASHED_KEY_LEN) < 0) i--;
+    while(1) {
+        int cmp;
+
+        if (i < 0) break;
+        cmp = memcmp(key,n->keys+i*BTREE_HASHED_KEY_LEN,BTREE_HASHED_KEY_LEN);
+        if (cmp == 0) found = 1; /* the key is already present in the btree */
+        if (cmp >= 0) break;
+        i--;
+    }
+
+    if (!replace && found) {
+        errno = EBUSY;
+        return -1;
+    }
 
     if (n->isleaf) {
         uint64_t newoff; /* New node offset */
@@ -767,7 +780,7 @@ int btree_add_nonfull(struct btree *bt, uint64_t nodeptr, uint64_t pointedby, un
         }
         btree_free_node(n);
         btree_free_node(child);
-        return btree_add_nonfull(bt,newnode,pointedby,key,val,vlen);
+        return btree_add_nonfull(bt,newnode,pointedby,key,val,vlen,replace);
     }
     return 0;
 
@@ -861,7 +874,7 @@ err:
     return -1;
 }
 
-int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t vlen) {
+int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t vlen, int replace) {
     struct btree_node *root;
 
     if ((root = btree_read_node(bt,bt->rootptr)) == NULL) return -1;
@@ -882,7 +895,7 @@ int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t v
     } else {
         btree_free_node(root);
     }
-    return btree_add_nonfull(bt,bt->rootptr,BTREE_HDR_ROOTPTR_POS,key,val,vlen);
+    return btree_add_nonfull(bt,bt->rootptr,BTREE_HDR_ROOTPTR_POS,key,val,vlen,replace);
 
 err:
     btree_free_node(root);

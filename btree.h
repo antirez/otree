@@ -102,7 +102,7 @@ struct btree *btree_open(struct btree_vfs *vfs, char *path, int flags);
 void btree_close(struct btree *bt);
 void btree_set_flags(struct btree *bt, int flags);
 void btree_clear_flags(struct btree *bt, int flags);
-int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t vlen);
+int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t vlen, int replace);
 void btree_walk(struct btree *bt, uint64_t nodeptr);
 
 /* On disk allocator */
