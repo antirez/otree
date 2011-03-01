@@ -1,0 +1,7 @@
+There are tons of things to do as the lib is currently a work in progress
+and not ready to be used. So this is just a list of random things that must
+be done soon or later.
+
+- In memory freelist. So there is no disk access for allocation/free, simply the btree will leak some memory on disk when the application does not propetly close it.
+- crc32 in btree values. In the current allocation header we use a 64 bit length filed that is too much as our max allocation is 2GB. We needed the 8 byte header in order to preserve alignment. But we can use four of this bytes for crc32 purposes. This way the btree-check utility can validate values in a data agnostic way.
+- The btree-check utility should be able to rewrite the freelists. It can simply create an in-memory bitmap representing every 8 byte block of the btree. Then walk the whole btree, flipping every used 8 byte block to 1. At the end we can do a one-pass scan on the bitmap to populate all the free lists.

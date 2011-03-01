@@ -1,0 +1,44 @@
+There are a number of btree (and variants) implementations around, but for
+many reasons like complexity and tight coupling with external code bases, or
+licensing issues, to find an easy to embed implementation of an on disk btree
+is not an easy task.
+
+Since an on disk btree is a tool useful in a number of software projects this
+library is an attempt to bring to the table an open implementation of a btree.
+The term "open" here means: simple to use, BSD licensed, well documented, and
+simple to modify and understand.
+
+CURRENT STATUS
+==============
+
+Currently this is a work in progress, so far we have a subset of basic btree
+operations implemented on top of an on disk allocator (something like a
+file-based malloc).
+
+Supported operations are adding new keys, splitting of nodes.
+Deletion is not supported, nor update of old values.
+In other words the project is NOT usable so far, more work is needed.
+
+Currently everything is written on disk on every write for the sake of
+simplicity of the first implementation, but the work is in progress in order
+to cache the allocator metadata in memory, so that the performances can be
+enhanced.
+
+The goal is to eventually support all the following features:
+
+- A compromise between fast implementation and ability to incrementally reclaim
+  memory from disk automatically. This is why we have the on disk allocator.
+- Range queries using 128 bit precision integers, to use the btree as index.
+- Good tools for recovering and checking the btree.
+- Good documentation.
+
+Perhaps in the future:
+
+- Optional append only mode with compaction, for higher corruption resistance.
+
+In the first stage of the project the goal is to be good enough for the Redis
+project (in order to use this library for the diskstore feature of Redis).
+However while trying to reach this goal every care will be used in order to
+retain a great level of generality of this lib that will continue to live as a
+stand alone library. Redis will just happen to use a copy of it.
+

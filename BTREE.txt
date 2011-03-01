@@ -1,0 +1,308 @@
+FORMAT OF INTEGERS
+==================
+
+In the following document all the integers are intended to be in network byte
+order. All the sizes are stored as 32 bit unsigned integers, while all the
+pointers are stored as 64 bit unsigned integers.
+
+So the maximum data size, and in general the maximum number of items, is
+2^32-1 while the maximum size of the database file is 2^64-1 bytes.
+
+LAYOUT
+======
+
++------------------------------------------+
+|                 HEADER                   |
++------------------------------------------+
+| 8 bytes freelist                         |
++------------------------------------------+
+| 16 bytes freelist                        |
++------------------------------------------+
+|... more power of two freelists ...       |
++------------------------------------------+
+| 2GB bytes freelist                       |
++------------------------------------------+
+|            ROOT node offset              |
++------------------------------------------+
+/                                          /
+/      all the other nodes and data        /
++------------------------------------------+
+
+Freelists are available for sizes for 8, 16, 32, 64, 128, 256, 512, 1024
+2048, 4096, 8192, 16384, 32768, ..., 2GB, for a total of 29 free lists.
+
+ALIGNMENT REQUIREMENTS
+======================
+
+Every pointer on disk is aligned to 8 byte boundary, so that if the block is
+a multiple of 8 (512 and 4096 are for example) there are more consistency
+guarantees when writing a single pointer on disk for atomic updates.
+
+In order to ensure this property we simply do the following:
+new blocks of data are always allocated in multiple of 8.
+Nodes, freelists, and all the structures we write inside data blocks are
+always contain 8 bytes aligned pointers.
+
+HEADER
+======
+
++--------+--------+--------+--------+
+| magic  |version |  free  |freeoff |
++--------+--------+--------+--------+
+
+The magic is the 64 bit string "REDBTREE"
+
+The version field is the version of the btree, as an ascii string: "00000000".
+
+The freeoff is a pointer to the first byte of the file that is not used, so
+it can be used for allocations. When there is the need to allocate more space
+then available, the file size is enlarged using truncate(2).
+
+the free field is the amount of free space starting at freeoff. 64 bit.
+
+The file is always enlarged by at least BTREE_PREALLOC_SIZE that is a power
+of two.
+
+FREELIST BLOCK
+==============
+
++--------+--------+--------+--------+
+|  prev  |  next  |numitems| item1  |
++-----------------------------------+
+/                                   /
+/           more items              /
+/                                   /
++--------+--------------------------+
+| item N |
++--------+
+
+Every free list block contains BTREE_FREELIST_BLOCK_ITEMS items.
+
+'next' is the offset of the next free list block for the same size. If the
+block is the last one, next is set to the value of zero.
+
+'prev' is the offset of the previous free list block for the same size. If the
+block is the first one, prev is set to the value of zero.
+
+'numitems' is the number of used items in this freelist block.
+Since this is a count can't go over 32 bits but it is written as 64 bit on disk so that the free list block is just a sequence of N 64 bit numbers.
+
+Every item is just a pointer to some place of the file.
+
+Implementations should try to take freelist pointers in memory, for
+instance, for every size:
+
+- Offsets for all the freelist blocks
+- Number of elements of the last block (all the other blocks are full)
+
+ALLOCATION
+==========
+
+The btree allocates memory in pieces of power of two sizes. For instance if
+there is to create a new node, BTREE_ALLOC is called, with the size of the
+node. If the amount to allocate is not already a power of two, the allocator
+will return a block that is exactly like the nearest power of two that is
+greater than the specified size.
+
+Data is allocated by looking at the free list for that size. If there is an
+available block to reuse, it is removed from the free list and reused
+(just updating the number of items in the free list block, or alternatively
+removing the block and the link from the previous block if this was the
+latest item in the current free list block).
+
+If there is no space to reuse for the allocation, we check if there is
+data at the end of the file that is ready to be used. This is done simply
+checking at the difference between the 'totlen' and 'freeoff' fields in the
+header. If there is not enough space a truncate(2) operation is performed
+against the file to allocate more space at the end.
+
+Every time BTREE_ALLOC performs an allocation, the returned block is
+prefixed with a byte reporting the size of the allocated block. Since
+allocations are always power of two, this is just the esponent so that
+2 raised to it will provide the allocation size.
+
+So actually if we call BTREE_ALLOC(4), this is what happens:
+
+ * one byte is added, so BTREE_ALLOC will really try to allocate 5 bytes.
+ * the nearest power of two greater than 5 is 8.
+ * the freelist for 8 bytes is checked. If there is an item it is reused.
+   (note that we don't need to write the size prefix when we reuse an
+    item, there should already be the right number in the header).
+ * if there is no free space, more free space is created at the end, of
+   at least BTREE_PREALLOC_SIZE, or more if the allocation needed more.
+ * The one byte header is written as first byte, an the pointer to the
+   next byte is returned.
+
+RELEASING AN ALLOCATION
+=======================
+
+BTREE_FREE does the contrary, releasing an allocation so that the space
+will be available for further allocations.
+
+What happens is simply that that the pointer to the released allocation is
+put into the corresponding free list.
+
+As you can see the size of the btree file will never get smaller, as even
+when memory is released we take it pre-allocated into free lists.
+A tool will be provided for off line compaction of databases that for some
+reason need to be restored to the minimum size, for instance for backups
+or WAN transfers.
+
+BTREE NODE
+==========
+
+The B-tree node is composed of:
+
+    N keys
+    N values pointers
+    N+1 pointers to child nodes
+
+Every node can have from BTREE_MIN_KEYS to BTREE_MAX_KEYS keys.
+
+All the keys are the same size of 16 bytes, that is, the first 16 bytes of
+the SHA1 sum of the real key if big keys support is enabled.
+
+Keys may also be 128 bit numbers when the btree is used as an index, or
+fixed length 16 bytes keys, possible zero padded at the end if the key
+is not binary safe but may be shorter.
+
++--------+--------+--------+--------+
+| start  |numkeys | isleaf | notused|
++--------+--------+--------+--------+
+|                key1               |
++--------+--------+--------+--------+
+|                key2               |
++--------+--------+--------+--------+
+|      ... all the other keys ..    |
++--------+--------+--------+--------+
+| value pointer 1 | value pointer 2 |
++--------+--------+--------+--------+
+| ... N value pointers in total ... |
++-----------------------------------+
+| child pointer 1 | child pointer 2 |
++--------+--------+--------+--------+
+| .. N+1 child pointers in total .. |
++--------+--------------------------+
+|  end   |
++--------+
+
+start is just a random 32 bit number. The same random number is also written
+in the end field. This is used in order to detect corruptions (half written
+noes).
+
+numkeys is the number of keys in this node, and is a count (32 bit integer).
+
+isleaf is set to 0 if the node is not a leaf, otherwise to 1. (32 bit integer)
+
+unused is a not used field, 32 bit. It was added in order to make sure all the
+pointers are 8 bytes aligned, may be used in future versions of the btree.
+
+key1 ... keyN are the fixed length keys, 16 bytes. If support for big keys
+is enabled, this is the SHA1 of the key, truncated at 16 bytes.
+
+all the pointers are simply 64 bit unsigend offsets.
+
+All nodes are allocated with space for the maximum number of keys, so for
+instance if BTREE_MAX_KEYS is 255, every node will be:
+
+4 + 4 + 4 + 4 + 16*255 + 8*255 + 8*256 + 4 bytes = 8188 bytes.
+
+It is important to select BTREE_MAX_KEYS so that it is just a little smaller
+than a power of two. In this case 8188 is just a bit smaller than 8192.
+
+REDIS LEVEL OPERATIONS
+======================
+
+DISKSTORE LOCK and DISKSTORE UNLOCK commands may be implemented in order to
+tell Redis to hold new changes in memory and don't write new things on
+diskstore, exactly like what happens when a BGSAVE is in progress with diskstore
+enabled. This is useful in order to allow the system administrator to copy
+the B-TREE while Redis is running.
+
+FREE LIST HANDLING
+==================
+
+Let's assume that:
+
+1) The free list block of our btree is 512 bytes.
+2) We receive an btree_alloc() free request against another block of 512 bytes.
+3) The latest free list for size 512 bytes is all full:
+
+[UUUUU ... UUUUU] (U means "used")
+
+Since we received a btree_alloc we need to put a new item inside the free list
+block, but since it is full we need to allocate a new 512 bytes block.
+Allocating this block would result in the current block to have a free item!
+So after we link the new block we'll obtain:
+
+[UUUUU ... UUUU ] -> [                ]
+
+That's not correct as the previous block now has a free item.
+
+So what we do instead is to use the block that we should put into the free list
+as a new block for the free list. So the final result is:
+
+[UUUUU ... UUUUU] -> [                ]
+
+That is what we want.
+
+On the contrary, if we want to allocaet a block 512 bytes in size, and there
+is an empty block at the tail of our free list, we just use the block itself.
+
+RANDOM IDEAS / TODO
+===================
+
+1) Take a global incremental 64 bit counter and set it always both at the start and at the end of a node, so that it is possible to detect half written blocks.
+2) Perhaps it is better to return allocations always zeroed, even when we reuse an entry in the freelist.
+3) Check at startup that the file length is equal to freeoff+free in header.
+
+USEFUL RESOURCES ON BTREES
+==========================
+
+- Introduction to Algorithms (Cormen, ...), chapter on B-TREEs.
+- http://dr-josiah.blogspot.com/2010/08/databases-on-ssds-initial-ideas-on.html
+- http://www.eecs.berkeley.edu/~brewer/cs262/LFS.pdf
+
+NODE SPLITTING
+==============
+
+x:   c h
+   /  |  \
+  /   |   \
+ a    |  z zz zzz
+      |
+y:  d e ee
+
+
+i = 1
+-----
+
+x:   c  e  h
+   /  |   |  \
+  /   |   |   \
+ a    |   |  z zz zzz
+      |   |
+y:    d   ee
+
+
+k[i+1] = k[i], per numkeys-i = (2 - 1) = 1
+c[i+2] = c[i+1], per numkeys-i = (2 - 1) = 1
+k[i] = e
+c[i] = left
+c[i+1] = right
+
+i = 2
+-----
+
+x:   c h  zz
+   /  |  \   \
+  /   |   \   \
+ a    |    z  zzz
+      |
+y:  d e ee
+
+k[3] = k[2], per numkeys-i = (2-2) = 0
+c[4] = k[3], per numkeys-i = (2-2) = 0
+k[2] = zz
+c[i] = left
+c[i+1] = right
