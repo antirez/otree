@@ -923,7 +923,7 @@ err:
 }
 
 /* Just a debugging function to check what's inside the whole btree... */
-void btree_walk(struct btree *bt, uint64_t nodeptr) {
+void btree_walk_rec(struct btree *bt, uint64_t nodeptr, int level) {
     struct btree_node *n;
     unsigned int j;
     
@@ -935,13 +935,13 @@ void btree_walk(struct btree *bt, uint64_t nodeptr) {
     for (j = 0; j < n->numkeys; j++) {
         char *data;
         uint32_t datalen;
+        int k;
 
         if (n->children[j] != 0) {
-            btree_walk(bt,n->children[j]);
+            btree_walk_rec(bt,n->children[j],level+1);
         }
-        if (j == 0)
-            printf("Node at %llu, %d keys\n", nodeptr, (int)n->numkeys);
-        printf(" Key %20s: ", n->keys+(j*BTREE_HASHED_KEY_LEN));
+        for (k = 0; k < level; k++) printf(" ");
+        printf("(@%llu) Key %20s: ", nodeptr, n->keys+(j*BTREE_HASHED_KEY_LEN));
         btree_alloc_size(bt,&datalen,n->values[j]);
         data = malloc(datalen+1);
         btree_pread(bt,data,datalen,n->values[j]);
@@ -952,6 +952,10 @@ void btree_walk(struct btree *bt, uint64_t nodeptr) {
         free(data);
     }
     if (n->children[j] != 0) {
-        btree_walk(bt,n->children[j]);
+        btree_walk_rec(bt,n->children[j], level+1);
     }
+}
+
+void btree_walk(struct btree *bt, uint64_t nodeptr) {
+    btree_walk_rec(bt,nodeptr,0);
 }
