@@ -103,6 +103,7 @@ void btree_close(struct btree *bt);
 void btree_set_flags(struct btree *bt, int flags);
 void btree_clear_flags(struct btree *bt, int flags);
 int btree_add(struct btree *bt, unsigned char *key, unsigned char *val, size_t vlen, int replace);
+int btree_find(struct btree *bt, unsigned char *key, uint64_t *voff);
 void btree_walk(struct btree *bt, uint64_t nodeptr);
 
 /* On disk allocator */

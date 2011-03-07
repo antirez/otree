@@ -922,6 +922,42 @@ err:
     return -1;
 }
 
+/* Find a record by key.
+ * The function seraches for the specified key. If the key is found
+ * 0 is returned, and *voff is set to the offset of the value on disk.
+ * 
+ * On error -1 is returned and errno set accordingly.
+ * 
+ * Non existing key is considered an error with errno = ENOENT. */
+int btree_find(struct btree *bt, unsigned char *key, uint64_t *voff) {
+    struct btree_node *n;
+    uint64_t nptr = bt->rootptr;
+    unsigned int j;
+
+    while(1) {
+        int cmp;
+
+        if ((n = btree_read_node(bt,nptr)) == NULL) return -1;
+        for (j = 0; j < n->numkeys; j++) {
+            cmp = memcmp(key,n->keys+BTREE_HASHED_KEY_LEN*j,
+                BTREE_HASHED_KEY_LEN);
+            if (cmp <= 0) break;
+        }
+        if (j < n->numkeys && cmp == 0) {
+            btree_free_node(n);
+            if (voff) *voff = n->values[j];
+            return 0;
+        }
+        if (n->isleaf || n->children[j] == 0) {
+            btree_free_node(n);
+            errno = ENOENT;
+            return -1;
+        }
+        nptr = n->children[j];
+        btree_free_node(n);
+    }
+}
+
 /* Just a debugging function to check what's inside the whole btree... */
 void btree_walk_rec(struct btree *bt, uint64_t nodeptr, int level) {
     struct btree_node *n;
