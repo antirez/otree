@@ -96,10 +96,11 @@ int main(int argc, char **argv) {
         }
     } else if (op == OP_FIND) {
         int retval;
-        char key[16];
+        char key[16], *data;
         memset(key,0,16);
         strcpy(key,argv[2]);
         uint64_t voff;
+        uint32_t datalen;
 
         retval = btree_find(bt,(unsigned char*)key,&voff);
         if (retval == -1) {
@@ -112,6 +113,13 @@ int main(int argc, char **argv) {
             }
         }
         printf("Key found at %llu\n", voff);
+
+        btree_alloc_size(bt,&datalen,voff);
+        data = malloc(datalen+1);
+        btree_pread(bt,(unsigned char*)data,datalen,voff);
+        data[datalen] = '\0';
+        printf("Value: %s\n", data);
+        free(data);
     }
     btree_close(bt);
     return 0;

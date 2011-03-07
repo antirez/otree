@@ -110,3 +110,5 @@ void btree_walk(struct btree *bt, uint64_t nodeptr);
 uint64_t btree_alloc(struct btree *bt, uint32_t size);
 int btree_free(struct btree *bt, uint64_t ptr);
 int btree_alloc_size(struct btree *bt, uint32_t *size, uint64_t ptr);
+ssize_t btree_pread(struct btree *bt, void *buf, uint32_t nbytes,
+                    uint64_t offset);
