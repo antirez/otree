@@ -11,6 +11,7 @@
 #define OP_ADD 3
 #define OP_WALK 4
 #define OP_FILL 5
+#define OP_FIND 6
 
 int main(int argc, char **argv) {
     struct btree *bt;
@@ -35,6 +36,8 @@ int main(int argc, char **argv) {
         op = OP_WALK;
     } else if (!strcasecmp(argv[1],"fill")) {
         op = OP_FILL;
+    } else if (!strcasecmp(argv[1],"find")) {
+        op = OP_FIND;
     } else {
         printf("not supported op %s\n", argv[1]);
         exit(1);
@@ -91,6 +94,24 @@ int main(int argc, char **argv) {
                 goto err;
             }
         }
+    } else if (op == OP_FIND) {
+        int retval;
+        char key[16];
+        memset(key,0,16);
+        strcpy(key,argv[2]);
+        uint64_t voff;
+
+        retval = btree_find(bt,(unsigned char*)key,&voff);
+        if (retval == -1) {
+            if (errno == ENOENT) {
+                printf("Key not found\n");
+                exit(0);
+            } else {
+                perror("Error searching for key");
+                exit(1);
+            }
+        }
+        printf("Key found at %llu\n", voff);
     }
     btree_close(bt);
     return 0;
