@@ -10,6 +10,7 @@
 #define OP_ALLOCFREE 2
 #define OP_ADD 3
 #define OP_WALK 4
+#define OP_FILL 5
 
 int main(int argc, char **argv) {
     struct btree *bt;
@@ -32,6 +33,8 @@ int main(int argc, char **argv) {
         op = OP_ADD;
     } else if (!strcasecmp(argv[1],"walk")) {
         op = OP_WALK;
+    } else if (!strcasecmp(argv[1],"fill")) {
+        op = OP_FILL;
     } else {
         printf("not supported op %s\n", argv[1]);
         exit(1);
@@ -56,6 +59,7 @@ int main(int argc, char **argv) {
             btree_free(bt,ptr);
         }
     }
+
     if (op == OP_ADD) {
         int retval;
         char key[16];
@@ -70,8 +74,28 @@ int main(int argc, char **argv) {
         }
     } else if (op == OP_WALK) {
         btree_walk(bt,bt->rootptr);
-    }
+    } else if (op == OP_FILL) {
+        for (j = 0; j < count; j++) {
+            int r = random()%arg;
+            int retval;
+            char key[64];
+            char val[64];
 
+            memset(key,0,64);
+            snprintf(key,64,"k%d",r);
+            snprintf(val,64,"val:%d",r);
+            retval = btree_add(bt,(unsigned char*)key,
+                            (unsigned char*)val, strlen(val), 1);
+            if (retval == -1) {
+                printf("Error: %s\n", strerror(errno));
+                goto err;
+            }
+        }
+    }
     btree_close(bt);
     return 0;
+
+err:
+    btree_close(bt);
+    return 1;
 }
