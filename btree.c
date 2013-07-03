@@ -151,10 +151,10 @@ uint64_t btree_u64_from_big(unsigned char *buf) {
     val |= (uint64_t) buf[1] << 48;
     val |= (uint64_t) buf[2] << 40;
     val |= (uint64_t) buf[3] << 32;
-    val |= buf[4] << 24;
-    val |= buf[5] << 16;
-    val |= buf[6] << 8;
-    val |= buf[7];
+    val |= (uint64_t) buf[4] << 24;
+    val |= (uint64_t) buf[5] << 16;
+    val |= (uint64_t) buf[6] << 8;
+    val |= (uint64_t) buf[7];
     return val;
 }
 
