@@ -409,7 +409,7 @@ int btree_write_node(struct btree *bt, struct btree_node *n, uint64_t offset) {
     btree_u32_to_big(p,bt->mark); p += 4; /* start mark */
     btree_u32_to_big(p,n->numkeys); p += 4; /* number of keys */
     btree_u32_to_big(p,n->isleaf); p += 4; /* is a leaf? */
-    p += 4; /* unused field, needed for alignment */
+    btree_u32_to_big(p,0); p += 4; /* unused field, needed for alignment */
     memcpy(p,n->keys,sizeof(n->keys)); p += sizeof(n->keys); /* keys */
     /* values */
     for (j = 0; j < BTREE_MAX_KEYS; j++) {
