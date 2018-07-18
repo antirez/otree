@@ -973,8 +973,8 @@ int btree_find(struct btree *bt, unsigned char *key, uint64_t *voff) {
             if (cmp <= 0) break;
         }
         if (j < n->numkeys && cmp == 0) {
-            btree_free_node(n);
             if (voff) *voff = n->values[j];
+            btree_free_node(n);
             return 0;
         }
         if (n->isleaf || n->children[j] == 0) {
