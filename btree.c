@@ -720,7 +720,7 @@ int btree_node_is_full(struct btree_node *n) {
  * Note: this function does not change the position of the children as it
  * is intented to be used only on leafs. */
 void btree_node_insert_key_at(struct btree_node *n, int i, unsigned char *key, uint64_t valoff) {
-    void *p;
+    char *p;
     
     p = n->keys + (i*BTREE_HASHED_KEY_LEN);
     memmove(p+BTREE_HASHED_KEY_LEN,p,(n->numkeys-i)*BTREE_HASHED_KEY_LEN);
